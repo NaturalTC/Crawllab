@@ -1,0 +1,265 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Thread vs Async Crawler</title>
+  <link rel="stylesheet" href="/static/style.css" />
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+</head>
+<body>
+  <div class="layout">
+
+    <!-- Header -->
+    <header class="header">
+      <div class="header-left">
+        <p class="eyebrow">PYTHON · CONCURRENCY BENCHMARK</p>
+        <h1 class="title">Thread vs Async Crawler</h1>
+        <p class="subtitle">Compares single-threaded, ThreadPoolExecutor, and asyncio/aiohttp across the same workload.</p>
+      </div>
+      <div class="header-right">
+        <span class="badge {% if mongo_configured %}badge--green{% else %}badge--muted{% endif %}">
+          <span class="badge-dot"></span>
+          MongoDB {% if mongo_configured %}Connected{% else %}Not configured{% endif %}
+        </span>
+      </div>
+    </header>
+
+    <!-- Config strip -->
+    <div class="config-strip">
+      <div class="config-item">
+        <span class="config-label">Seed URL</span>
+        <span class="config-value">{{ config.seed }}</span>
+      </div>
+      <div class="config-item">
+        <span class="config-label">Pages per run</span>
+        <span class="config-value">{{ config.max_pages }}</span>
+      </div>
+      <div class="config-item">
+        <span class="config-label">Workers</span>
+        <span class="config-value">{{ config.workers }}</span>
+      </div>
+      <div class="config-item">
+        <span class="config-label">Repeats</span>
+        <span class="config-value">{{ config.repeats }}</span>
+      </div>
+    </div>
+
+    <!-- Run button -->
+    <div class="run-section">
+      <button id="run-btn" class="run-btn" onclick="startBenchmark()">Run Benchmark</button>
+      <div id="status-row" class="status-row hidden">
+        <div class="spinner"></div>
+        <span id="status-text" class="status-text"></span>
+      </div>
+      <p id="error-msg" class="error-msg hidden"></p>
+    </div>
+
+    <!-- Results -->
+    <div id="results-section" class="results-section {% if not results %}hidden{% endif %}">
+
+      <!-- Summary table -->
+      <div class="card">
+        <p class="card-label">RESULTS SUMMARY</p>
+        <table class="summary-table">
+          <thead>
+            <tr>
+              <th>Approach</th>
+              <th>Min (s)</th>
+              <th>Avg (s)</th>
+              <th>Max (s)</th>
+              <th>vs Single</th>
+            </tr>
+          </thead>
+          <tbody id="summary-body">
+            {% if results and results.summary %}
+              {{ render_summary(results.summary) }}
+            {% endif %}
+          </tbody>
+        </table>
+      </div>
+
+      <!-- Chart -->
+      <div class="card">
+        <p class="card-label">AVG COMPLETION TIME (seconds — lower is better)</p>
+        <div class="chart-wrap">
+          <canvas id="bench-chart"></canvas>
+        </div>
+      </div>
+
+      <!-- Raw runs -->
+      <div class="card">
+        <p class="card-label">RAW RUNS</p>
+        <div id="raw-runs" class="raw-runs">
+          {% if results %}{{ render_raw(results) }}{% endif %}
+        </div>
+      </div>
+
+    </div>
+  </div>
+
+  <script>
+    let chart = null;
+
+    const LABELS = {
+      single_thread: "Single-threaded",
+      thread_pool:   "ThreadPoolExecutor",
+      asyncio:       "asyncio + aiohttp",
+    };
+
+    const COLORS = {
+      single_thread: { bg: "rgba(248,113,113,0.75)", border: "#f87171" },
+      thread_pool:   { bg: "rgba(251,191,36,0.75)",  border: "#fbbf24" },
+      asyncio:       { bg: "rgba(56,189,248,0.75)",  border: "#38bdf8" },
+    };
+
+    function startBenchmark() {
+      const btn = document.getElementById("run-btn");
+      btn.disabled = true;
+      document.getElementById("status-row").classList.remove("hidden");
+      document.getElementById("error-msg").classList.add("hidden");
+      document.getElementById("status-text").textContent = "Starting…";
+
+      fetch("/api/run", { method: "POST" })
+        .then(r => r.json())
+        .then(data => {
+          if (data.error) throw new Error(data.error);
+          poll();
+        })
+        .catch(err => showError(err.message, btn));
+    }
+
+    function poll() {
+      fetch("/api/status")
+        .then(r => r.json())
+        .then(data => {
+          document.getElementById("status-text").textContent = data.progress || "";
+          if (data.error) { showError(data.error, document.getElementById("run-btn")); return; }
+          if (data.running) { setTimeout(poll, 1000); return; }
+          loadResults();
+        })
+        .catch(() => setTimeout(poll, 2000));
+    }
+
+    function loadResults() {
+      fetch("/api/results")
+        .then(r => r.json())
+        .then(data => {
+          renderResults(data);
+          document.getElementById("run-btn").disabled = false;
+          document.getElementById("status-row").classList.add("hidden");
+        })
+        .catch(err => showError(err.message, document.getElementById("run-btn")));
+    }
+
+    function renderResults(data) {
+      document.getElementById("results-section").classList.remove("hidden");
+      renderSummary(data.summary);
+      renderChart(data.summary);
+      renderRaw(data);
+    }
+
+    function renderSummary(summary) {
+      const single_avg = summary.single_thread.avg;
+      const rows = Object.entries(summary).map(([key, s]) => {
+        const speedup = key === "single_thread" ? "—" : (single_avg / s.avg).toFixed(2) + "×";
+        const cls = key === "asyncio" ? "highlight" : key === "thread_pool" ? "mid" : "";
+        return `<tr class="${cls}">
+          <td><span class="approach-dot" style="background:${COLORS[key].border}"></span>${LABELS[key]}</td>
+          <td>${s.min}</td>
+          <td><strong>${s.avg}</strong></td>
+          <td>${s.max}</td>
+          <td class="speedup">${speedup}</td>
+        </tr>`;
+      });
+      document.getElementById("summary-body").innerHTML = rows.join("");
+    }
+
+    function renderChart(summary) {
+      const keys = ["single_thread", "thread_pool", "asyncio"];
+      const avgs  = keys.map(k => summary[k].avg);
+      const mins  = keys.map(k => summary[k].min);
+      const maxs  = keys.map(k => summary[k].max);
+
+      if (chart) chart.destroy();
+
+      const ctx = document.getElementById("bench-chart").getContext("2d");
+      chart = new Chart(ctx, {
+        type: "bar",
+        data: {
+          labels: keys.map(k => LABELS[k]),
+          datasets: [
+            {
+              label: "Min",
+              data: mins,
+              backgroundColor: keys.map(k => COLORS[k].bg.replace("0.75", "0.4")),
+              borderColor: keys.map(k => COLORS[k].border),
+              borderWidth: 1,
+              borderRadius: 4,
+            },
+            {
+              label: "Avg",
+              data: avgs,
+              backgroundColor: keys.map(k => COLORS[k].bg),
+              borderColor: keys.map(k => COLORS[k].border),
+              borderWidth: 2,
+              borderRadius: 4,
+            },
+            {
+              label: "Max",
+              data: maxs,
+              backgroundColor: keys.map(k => COLORS[k].bg.replace("0.75", "0.35")),
+              borderColor: keys.map(k => COLORS[k].border),
+              borderWidth: 1,
+              borderRadius: 4,
+              borderDash: [4, 2],
+            },
+          ],
+        },
+        options: {
+          responsive: true,
+          plugins: {
+            legend: { labels: { color: "#94a3b8", font: { size: 12 } } },
+            tooltip: { callbacks: { label: ctx => ` ${ctx.dataset.label}: ${ctx.parsed.y}s` } },
+          },
+          scales: {
+            x: { ticks: { color: "#94a3b8" }, grid: { color: "rgba(255,255,255,0.05)" } },
+            y: {
+              ticks: { color: "#94a3b8", callback: v => v + "s" },
+              grid: { color: "rgba(255,255,255,0.05)" },
+              title: { display: true, text: "Seconds", color: "#64748b" },
+            },
+          },
+        },
+      });
+    }
+
+    function renderRaw(data) {
+      const keys = ["single_thread", "thread_pool", "asyncio"];
+      const html = keys.map(key => {
+        const runs = data[key].map(r =>
+          `<span class="run-pill">#${r.run} <strong>${r.seconds}s</strong></span>`
+        ).join("");
+        return `<div class="raw-group">
+          <span class="raw-label" style="color:${COLORS[key].border}">${LABELS[key]}</span>
+          <div class="run-pills">${runs}</div>
+        </div>`;
+      }).join("");
+      document.getElementById("raw-runs").innerHTML = html;
+    }
+
+    function showError(msg, btn) {
+      const el = document.getElementById("error-msg");
+      el.textContent = "Error: " + msg;
+      el.classList.remove("hidden");
+      document.getElementById("status-row").classList.add("hidden");
+      if (btn) btn.disabled = false;
+    }
+
+    // Render initial results from server if available
+    {% if results and results.summary %}
+    renderChart({{ results.summary | tojson }});
+    {% endif %}
+  </script>
+</body>
+</html>

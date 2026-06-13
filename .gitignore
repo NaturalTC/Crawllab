@@ -23,9 +23,9 @@ venv/
 # MongoDB local data (if you ever dump)
 dump/
 
-# ignore raw JSON, but keep the plot
+# generated results
 results/raw_results.json
-!results/benchmark_plot.png
+results/benchmark_plot.png
 
 # IDE configs
 .vscode/
