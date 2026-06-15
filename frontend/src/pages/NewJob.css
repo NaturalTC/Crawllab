@@ -1,0 +1,29 @@
+.newjob-page { min-height: 100vh; padding: 32px 24px; max-width: 680px; margin: 0 auto; }
+
+.newjob-header { margin-bottom: 24px; }
+.back-link { font-size: 13px; color: var(--muted); }
+.back-link:hover { color: var(--text); }
+
+.newjob-card h1 { font-size: 20px; font-weight: 700; margin-bottom: 6px; }
+.newjob-sub { font-size: 13px; color: var(--muted); margin-bottom: 28px; }
+
+.newjob-form { display: flex; flex-direction: column; gap: 20px; }
+
+.fields-row { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 16px; }
+
+.hint { font-size: 11px; color: var(--muted); font-weight: 400; margin-left: 4px; }
+
+.strategy-info {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 16px;
+}
+.strategy { display: flex; justify-content: space-between; align-items: center; }
+.strategy-name { font-size: 13px; font-weight: 500; }
+.strategy-desc { font-size: 12px; color: var(--muted); }
+
+.form-actions { display: flex; justify-content: flex-end; gap: 12px; }

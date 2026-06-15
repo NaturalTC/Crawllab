@@ -1,40 +1,6 @@
-# Byte-compiled / optimized / DLL files
-__pycache__/
-*.py[cod]
-*$py.class
-
-# C extensions
-*.so
-
-# Distribution / packaging
-build/
-dist/
-*.egg-info/
-.eggs/
-
-# Virtual environments
-env/
-venv/
-.venv/
-
-# dotenv
-.env
-
-# MongoDB local data (if you ever dump)
-dump/
-
-# generated results
-results/raw_results.json
-results/benchmark_plot.png
-
-# IDE configs
-.vscode/
-.idea/
-*.suo
-*.ntvs*
-*.njsproj
-*.sln
-
-# Editor swap/temp files
-*.swp
-*~
+backend/.venv/
+backend/.env
+backend/__pycache__/
+backend/**/__pycache__/
+frontend/node_modules/
+frontend/dist/

@@ -1,59 +1,47 @@
-# Thread vs Async Crawler
+# CrawlLab
 
-Benchmarks three Python concurrency models against the same crawl workload and visualizes the results in a Flask dashboard.
+A fullstack web crawl analytics platform. Users register, submit crawl jobs against any seed URL, and get a live performance comparison across three Python concurrency strategies: single-threaded, ThreadPoolExecutor, and asyncio+aiohttp.
 
-| Approach | How it works |
-|---|---|
-| **Single-threaded** | Sequential requests — one page at a time |
-| **ThreadPoolExecutor** | OS threads — multiple requests in parallel, GIL-bound |
-| **asyncio + aiohttp** | Event loop — non-blocking I/O, no thread overhead |
+**Stack:** Flask · MongoDB · React · Recharts · JWT auth · SSE (real-time progress)
 
 ## Setup
 
+**Prerequisites:** MongoDB running locally on port 27017, Node.js, Python 3.12+
+
+### Backend
+
 ```bash
-git clone <repo>
-cd thread-vs-async-crawler
-python -m venv .venv && source .venv/bin/activate
+cd backend
+cp .env.example .env        # edit JWT_SECRET_KEY if desired
+python3 -m venv .venv
+source .venv/bin/activate
 pip install -r requirements.txt
-cp .env.example .env
+python run.py               # http://localhost:5000
 ```
 
-Edit `.env` to configure the benchmark (seed URL, page count, workers, repeats). MongoDB is optional — leave `MONGODB_URI` blank to skip persistence.
-
-## Run
+### Frontend
 
 ```bash
-python app.py
+cd frontend
+npm install
+npm run dev                 # http://localhost:5173
 ```
 
-Open [http://localhost:5000](http://localhost:5000) and click **Run Benchmark**.
+## API
 
-The dashboard runs all three crawlers, then displays:
-- A summary table with min/avg/max times and speedup vs single-threaded
-- An interactive Chart.js bar chart
-- Raw timing for every individual run
+| Method | Route | Auth | Purpose |
+|---|---|---|---|
+| POST | `/api/auth/register` | — | Create account |
+| POST | `/api/auth/login` | — | Return JWT |
+| GET | `/api/auth/me` | JWT | Current user |
+| GET | `/api/jobs` | JWT | List user's jobs |
+| POST | `/api/jobs` | JWT | Create + start job |
+| GET | `/api/jobs/:id` | JWT | Job + results |
+| DELETE | `/api/jobs/:id` | JWT | Delete job |
+| GET | `/api/jobs/:id/stream` | JWT | SSE live progress |
 
-## Project structure
+## MongoDB collections
 
-```
-├── app.py                  # Flask app and routes
-├── crawlers/
-│   ├── threaded.py         # Single-threaded and ThreadPoolExecutor crawlers
-│   └── async_crawler.py    # asyncio + aiohttp crawler
-├── benchmark/
-│   └── runner.py           # Background thread, state tracking, result persistence
-├── templates/
-│   └── index.html          # Dashboard UI
-├── static/
-│   └── style.css           # Dark theme styles
-└── results/
-    └── raw_results.json    # Persisted between runs (gitignored)
-```
-
-## Key findings
-
-Async consistently outperforms threaded for I/O-bound workloads at scale. Threading adds OS-level thread overhead and GIL contention; asyncio handles the same concurrency with a single thread via cooperative multitasking. Single-threaded is the baseline — purely sequential, no parallelism.
-
-## Tech
-
-Python · Flask · asyncio · aiohttp · ThreadPoolExecutor · BeautifulSoup · MongoDB (optional)
+- `users` — email, bcrypt password hash, created_at
+- `jobs` — seed_url, config, status, user_id, timestamps
+- `results` — per-run timings and summary stats for all three strategies
