@@ -22,8 +22,10 @@ def _serialize_job(job: dict) -> dict:
     job["user_id"] = str(job["user_id"])
     if "created_at" in job:
         job["created_at"] = job["created_at"].isoformat()
-    if "completed_at" in job:
+    if job.get("completed_at") is not None:
         job["completed_at"] = job["completed_at"].isoformat()
+    else:
+        job["completed_at"] = None
     return job
 
 

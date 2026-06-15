@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 from flask_jwt_extended import JWTManager
 from flask_cors import CORS
 from pymongo import MongoClient
